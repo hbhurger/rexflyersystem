@@ -1,0 +1,13 @@
+{
+  "name": "rex-flyer-bot",
+  "version": "1.0.0",
+  "description": "A bot for the REX FLYER SYSTEM",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "discord.js": "^14.14.0"
+  }
+}
