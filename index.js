@@ -112,7 +112,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     // ==================== COMMAND: MILES (BALANCE) ====================
-    if (commandName === 'miles') {
+    if (commandName === 'points') {
         await interaction.deferReply();
         const targetDiscordUser = options.getUser('user') || user;
 
