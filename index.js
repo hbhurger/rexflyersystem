@@ -14,8 +14,8 @@ client.once('ready', async () => {
     // 3. Register the Slash Commands globally with Discord
     const commands = [
         new SlashCommandBuilder()
-            .setName('miles')
-            .setDescription('Check your Roblox Aviation frequent flyer miles')
+            .setName('point-balance')
+            .setDescription('Check your Rex Flyer points')
             .addStringOption(option => 
                 option.setName('username')
                 .setDescription('Your Roblox Username')
@@ -54,7 +54,7 @@ client.on('interactionCreate', async interaction => {
             });
 
             if (!robloxUserResponse.data.data.length) {
-                return interaction.editReply(`❌ Could not find a Roblox user named "${username}".`);
+                return interaction.editReply(`Could not find a Roblox user named "${username}".`);
             }
 
             const userId = robloxUserResponse.data.data[0].id;
@@ -68,7 +68,7 @@ client.on('interactionCreate', async interaction => {
             // Step C: Build a professional aviation-themed status card
             const embed = new EmbedBuilder()
                 .setColor('#00d2ff')
-                .setTitle(`✈️ Rex Flyer Status: ${displayName}`)
+                .setTitle(`Rex Flyer System: ${displayName}`)
                 .setDescription(`\`@${username}\``)
                 .addFields(
                     { name: 'Total Point Balance', value: `**${miles.toLocaleString()}** Points`, inline: true },
