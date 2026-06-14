@@ -1,7 +1,7 @@
 {
   "name": "rex-flyer-bot",
   "version": "1.0.0",
-  "description": "A bot for the REX FLYER SYSTEM",
+  "description": "Rex Flyer System Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
