@@ -1,95 +1,204 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
 
-// 1. Initialize the Discord Client
+// 1. Initialize Client
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// 2. Fetch configurations securely from Northflank Environment Variables
 const DATABASE_URL = process.env.DATABASE_URL;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
 client.once('ready', async () => {
     console.log(`✅ Logged in as ${client.user.tag}!`);
 
-    // 3. Register the Slash Commands globally with Discord
+    // 2. Define All Slash Commands
     const commands = [
+        // Link Roblox Account
         new SlashCommandBuilder()
-            .setName('point-balance')
-            .setDescription('Check your Rex Flyer points')
-            .addStringOption(option => 
-                option.setName('username')
-                .setDescription('Your Roblox Username')
-                .setRequired(true))
+            .setName('link')
+            .setDescription('Link your Roblox account to your Discord account')
+            .addStringOption(option => option.setName('username').setDescription('Your Roblox Username').setRequired(true)),
+
+        // Unlink Roblox Account
+        new SlashCommandBuilder()
+            .setName('unlink')
+            .setDescription('Unlink your current Roblox account from your Discord Account'),
+
+        // View Points/Miles Balance
+        new SlashCommandBuilder()
+            .setName('points')
+            .setDescription('Check your points balance')
+            .addUserOption(option => option.setName('user').setDescription('View someone else\'s miles (Optional)').setRequired(false)),
+
+        // ADMIN ONLY: Add Points
+        new SlashCommandBuilder()
+            .setName('addpoints')
+            .setDescription('Admin Only: Add points to a user')
+            .addStringOption(option => option.setName('username').setDescription('Roblox Username').setRequired(true))
+            .addIntegerOption(option => option.setName('amount').setDescription('Amount of miles to add').setRequired(true))
+            .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild), // Requires "Manage Server" permission
+
+        // ADMIN ONLY: Remove Points
+        new SlashCommandBuilder()
+            .setName('removepoints')
+            .setDescription('Admin Only: Remove points from a user')
+            .addStringOption(option => option.setName('username').setDescription('Roblox Username').setRequired(true))
+            .addIntegerOption(option => option.setName('amount').setDescription('Amount of miles to remove').setRequired(true))
+            .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // Requires "Manage Server" permission
     ].map(command => command.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 
     try {
-        console.log('🔄 Started refreshing application (/) commands.');
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands },
-        );
-        console.log('Successfully reloaded application (/) commands.');
+        console.log('🔄 Deploying application slash commands...');
+        await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+        console.log('✅ Slash commands successfully registered!');
     } catch (error) {
         console.error('❌ Error registering slash commands:', error);
     }
 });
 
-// 4. Handle Slash Command Interactions
+// Helper function to resolve Roblox Username to UserID
+async function getRobloxUser(username) {
+    try {
+        const response = await axios.post('https://users.roblox.com/v1/usernames/users', {
+            usernames: [username],
+            excludeBannedUsers: true
+        });
+        return response.data.data.length ? response.data.data[0] : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 3. Command Interaction Handler
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    if (interaction.commandName === 'miles') {
-        const username = interaction.options.getString('username');
-        
-        // Defer reply because fetching from Roblox & Firebase can take more than 3 seconds
+    const { commandName, options, user } = interaction;
+
+    // ==================== COMMAND: LINK ====================
+    if (commandName === 'link') {
         await interaction.deferReply();
+        const username = options.getString('username');
+        const robloxUser = await getRobloxUser(username);
+
+        if (!robloxUser) return interaction.editReply(`❌ Could not find a Roblox user named "${username}".`);
 
         try {
-            // Step A: Convert Roblox username to UserId using Roblox API
-            const robloxUserResponse = await axios.post('https://users.roblox.com/v1/usernames/users', {
-                usernames: [username],
-                excludeBannedUsers: true
-            });
+            // Save link to database under links/discordId -> robloxId
+            await axios.put(`${DATABASE_URL}links/${user.id}.json`, JSON.stringify(robloxUser.id));
+            
+            const embed = new EmbedBuilder()
+                .setColor('#00ff7f')
+                .setTitle('Account Linked Successfully!')
+                .setDescription(`Your Discord account has been tied to **${robloxUser.displayName}** (\`@${robloxUser.name}\`).`)
+                .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${robloxUser.id}&width=150&height=150&format=png`);
+            
+            await interaction.editReply({ embeds: [embed] });
+        } catch (err) {
+            await interaction.editReply('❌ Database error linking your account.');
+        }
+    }
 
-            if (!robloxUserResponse.data.data.length) {
-                return interaction.editReply(`Could not find a Roblox user named "${username}".`);
+    // ==================== COMMAND: UNLINK ====================
+    if (commandName === 'unlink') {
+        await interaction.deferReply();
+        try {
+            await axios.delete(`${DATABASE_URL}links/${user.id}.json`);
+            await interaction.editReply('Your Roblox account link has been successfully removed.');
+        } catch (err) {
+            await interaction.editReply('❌ Failed to update database context.');
+        }
+    }
+
+    // ==================== COMMAND: MILES (BALANCE) ====================
+    if (commandName === 'miles') {
+        await interaction.deferReply();
+        const targetDiscordUser = options.getUser('user') || user;
+
+        try {
+            // Find linked Roblox ID
+            const linkResponse = await axios.get(`${DATABASE_URL}links/${targetDiscordUser.id}.json`);
+            if (!linkResponse.data) {
+                return interaction.editReply(targetDiscordUser.id === user.id 
+                    ? '❌ You haven\'t linked a Roblox account yet! Use `/link` first.' 
+                    : `❌ ${targetDiscordUser.username} has not linked a Roblox account.`);
             }
 
-            const userId = robloxUserResponse.data.data[0].id;
-            const displayName = robloxUserResponse.data.data[0].displayName;
+            const robloxId = linkResponse.data;
 
-            // Step B: Fetch miles from your Firebase database
-            // Northflank automatically provides the DATABASE_URL. We append the JSON query.
-            const milesResponse = await axios.get(`${DATABASE_URL}${userId}.json`);
+            // Fetch current miles
+            const milesResponse = await axios.get(`${DATABASE_URL}miles/${robloxId}.json`);
             const miles = milesResponse.data !== null ? milesResponse.data : 0;
 
-            // Step C: Build a professional aviation-themed status card
             const embed = new EmbedBuilder()
                 .setColor('#00d2ff')
-                .setTitle(`Rex Flyer System: ${displayName}`)
-                .setDescription(`\`@${username}\``)
+                .setTitle(`Rex Flyer Account Summary`)
+                .setDescription(`Account holder: <@${targetDiscordUser.id}>`)
                 .addFields(
-                    { name: 'Total Point Balance', value: `**${miles.toLocaleString()}** Points`, inline: true },
-                    { name: 'Tier Level', value: miles >= 3000 ? 'Sapphire Member Tier' : 'Opal Member Tier', inline: true }
+                    { name: 'Total Balance', value: `✨ **${miles.toLocaleString()}** Miles`, inline: true },
+                    { name: 'Tier Level', value: miles >= 3000 ? '🥇 Sapphire' : 'Opal', inline: true }
                 )
-                .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=150&height=150&format=png`)
-                .setFooter({ text: 'Rex Flyer System' })
-                .setTimestamp();
+                .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=150&height=150&format=png`);
 
             await interaction.editReply({ embeds: [embed] });
+        } catch (err) {
+            await interaction.editReply('❌ Error accessing profile information.');
+        }
+    }
 
-        } catch (error) {
-            console.error('Database/API Error:', error);
-            await interaction.editReply('❌ There was an internal network error fetching your mileage data.');
+    // ==================== ADMIN COMMAND: ADD MILES ====================
+    if (commandName === 'addmiles') {
+        await interaction.deferReply();
+        const username = options.getString('username');
+        const amount = options.getInteger('amount');
+
+        if (amount <= 0) return interaction.editReply('❌ Amount must be greater than zero.');
+
+        const robloxUser = await getRobloxUser(username);
+        if (!robloxUser) return interaction.editReply(`❌ Roblox user "${username}" not found.`);
+
+        try {
+            const currentResponse = await axios.get(`${DATABASE_URL}miles/${robloxUser.id}.json`);
+            const currentMiles = currentResponse.data !== null ? currentResponse.data : 0;
+            const newTotal = currentMiles + amount;
+
+            await axios.put(`${DATABASE_URL}miles/${robloxUser.id}.json`, JSON.stringify(newTotal));
+            await interaction.editReply(`✅ Successfully added **${amount.toLocaleString()}** miles to **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
+        } catch (err) {
+            await interaction.editReply('❌ Failed to update records.');
+        }
+    }
+
+    // ==================== ADMIN COMMAND: REMOVE MILES ====================
+    if (commandName === 'removemiles') {
+        await interaction.deferReply();
+        const username = options.getString('username');
+        const amount = options.getInteger('amount');
+
+        if (amount <= 0) return interaction.editReply('❌ Amount must be greater than zero.');
+
+        const robloxUser = await getRobloxUser(username);
+        if (!robloxUser) return interaction.editReply(`❌ Roblox user "${username}" not found.`);
+
+        try {
+            const currentResponse = await axios.get(`${DATABASE_URL}miles/${robloxUser.id}.json`);
+            const currentMiles = currentResponse.data !== null ? currentResponse.data : 0;
+            
+            let newTotal = currentMiles - amount;
+            if (newTotal < 0) newTotal = 0; // Prevent negative balances
+
+            await axios.put(`${DATABASE_URL}miles/${robloxUser.id}.json`, JSON.stringify(newTotal));
+            await interaction.editReply(`Successfully removed **${amount.toLocaleString()}** miles from **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
+        } catch (err) {
+            await interaction.editReply('❌ Failed to update records.');
         }
     }
 });
 
-// 5. Connect the Bot to Discord
+// 4. Secure Boot Validation
 if (!DISCORD_TOKEN || !DATABASE_URL) {
-    console.error("❌ CRITICAL ERROR: Environment variables 'DISCORD_TOKEN' or 'DATABASE_URL' are missing on Northflank!");
+    console.error("❌ CRITICAL ERROR: Environment variables missing!");
     process.exit(1);
 } else {
     client.login(DISCORD_TOKEN);
