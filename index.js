@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
 
 // 1. Initialize Client
@@ -23,7 +23,7 @@ client.once('ready', async () => {
             .setName('unlink')
             .setDescription('Unlink your current Roblox account from your Discord Account'),
 
-        // View Points Balance (With custom component interface)
+        // View Points Balance (With stable layout interface)
         new SlashCommandBuilder()
             .setName('points')
             .setDescription('Check your points balance')
@@ -85,6 +85,7 @@ client.on('interactionCreate', async interaction => {
         if (!robloxUser) return interaction.editReply(`❌ Could not find a Roblox user named "${username}".`);
 
         try {
+            // Save link to database under links/discordId -> robloxId
             await axios.put(`${DATABASE_URL}links/${user.id}.json`, JSON.stringify(robloxUser.id));
             await interaction.editReply(`✅ Account Linked Successfully! Your Discord account has been tied to **${robloxUser.displayName}** (\`@${robloxUser.name}\`).`);
         } catch (err) {
@@ -103,7 +104,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // ==================== COMMAND: POINTS (CUSTOM LAYOUT) ====================
+    // ==================== COMMAND: POINTS (STABLE CUSTOM EMBED) ====================
     if (commandName === 'points') {
         await interaction.deferReply();
         const targetDiscordUser = options.getUser('user') || user;
@@ -135,70 +136,42 @@ client.on('interactionCreate', async interaction => {
             const points = pointsResponse.data !== null ? pointsResponse.data : 0;
 
             // Determine dynamic Tier Level label
-            const tierLevel = points >= 3000 ? 'Sapphire Tier' : 'Opal Tier';
+            const tierLevel = points >= 3000 ? '🥇 Sapphire Tier' : '🥈 Opal Tier';
 
             // Generate structural avatar endpoint 
             const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=150&height=150&format=png`;
 
-            // Respond using your precise visual component payload matrix structure
-            await interaction.editReply({
+            // Build the clean layout natively using stable fields
+            const embed = new EmbedBuilder()
+                .setColor('#2b2d31') // Native discord dark theme background blend color
+                .setTitle(`## Welcome, ${robloxName}!`)
+                .setDescription(`**Display Name:** ${robloxDisplayName}`)
+                .setThumbnail(avatarUrl);
+
+            // Construct button styling using standard components to prevent rendering drop errors
+            const actionRow = {
+                type: 1, // Action Row
                 components: [
                     {
-                        type: 17, // Section/Container wrapper
-                        components: [
-                            {
-                                type: 12, // Media Layout Component
-                                items: [
-                                    {
-                                        media: {
-                                            url: avatarUrl
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                type: 14, // Spacing Element
-                                spacing: 1,
-                                divider: true
-                            },
-                            {
-                                type: 10, // Text Header Component
-                                content: `## Welcome, ${robloxName}!\n`
-                            },
-                            {
-                                type: 14,
-                                spacing: 1,
-                                divider: true
-                            },
-                            {
-                                type: 10, // Subtext Element
-                                content: `${robloxDisplayName}`
-                            },
-                            {
-                                type: 14,
-                                spacing: 1,
-                                divider: true
-                            },
-                            {
-                                type: 1, // ActionRow element wrapper
-                                components: [
-                                    {
-                                        type: 2, // Secondary Button
-                                        style: 2,
-                                        label: `Points: ${points.toLocaleString()}`,
-                                        custom_id: `btn_points_${user.id}`
-                                    },
-                                    {
-                                        type: 2, // Secondary Button
-                                        style: 2,
-                                        label: tierLevel,
-                                        custom_id: `btn_tier_${user.id}`
-                                    }
-                                ]
-                            }
-                        ]
+                        type: 2, // Button component element
+                        style: 2, // Secondary Gray Color
+                        label: `Points: ${points.toLocaleString()}`,
+                        custom_id: `btn_pts_${user.id}`,
+                        disabled: true
+                    },
+                    {
+                        type: 2, 
+                        style: 2, 
+                        label: tierLevel,
+                        custom_id: `btn_tr_${user.id}`,
+                        disabled: true
                     }
                 ]
+            };
+
+            await interaction.editReply({
+                embeds: [embed],
+                components: [actionRow]
             });
 
         } catch (err) {
