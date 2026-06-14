@@ -153,7 +153,7 @@ client.on('interactionCreate', async interaction => {
                                 items: [
                                     {
                                         media: {
-                                            url: avatarUrl
+                                            url: "blob:https://discord-webhook.com/28c016f0-1da5-451b-92fa-1006600ce669"
                                         }
                                     }
                                 ]
