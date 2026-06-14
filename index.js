@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
 
 // 1. Initialize Client
@@ -23,18 +23,18 @@ client.once('ready', async () => {
             .setName('unlink')
             .setDescription('Unlink your current Roblox account from your Discord Account'),
 
-        // View Points/Miles Balance
+        // View Points Balance (With custom component interface)
         new SlashCommandBuilder()
             .setName('points')
             .setDescription('Check your points balance')
-            .addUserOption(option => option.setName('user').setDescription('View someone else\'s miles (Optional)').setRequired(false)),
+            .addUserOption(option => option.setName('user').setDescription('View someone else\'s points (Optional)').setRequired(false)),
 
         // ADMIN ONLY: Add Points
         new SlashCommandBuilder()
             .setName('addpoints')
             .setDescription('Admin Only: Add points to a user')
             .addStringOption(option => option.setName('username').setDescription('Roblox Username').setRequired(true))
-            .addIntegerOption(option => option.setName('amount').setDescription('Amount of miles to add').setRequired(true))
+            .addIntegerOption(option => option.setName('amount').setDescription('Amount of points to add').setRequired(true))
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild), // Requires "Manage Server" permission
 
         // ADMIN ONLY: Remove Points
@@ -42,7 +42,7 @@ client.once('ready', async () => {
             .setName('removepoints')
             .setDescription('Admin Only: Remove points from a user')
             .addStringOption(option => option.setName('username').setDescription('Roblox Username').setRequired(true))
-            .addIntegerOption(option => option.setName('amount').setDescription('Amount of miles to remove').setRequired(true))
+            .addIntegerOption(option => option.setName('amount').setDescription('Amount of points to remove').setRequired(true))
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild) // Requires "Manage Server" permission
     ].map(command => command.toJSON());
 
@@ -85,16 +85,8 @@ client.on('interactionCreate', async interaction => {
         if (!robloxUser) return interaction.editReply(`❌ Could not find a Roblox user named "${username}".`);
 
         try {
-            // Save link to database under links/discordId -> robloxId
             await axios.put(`${DATABASE_URL}links/${user.id}.json`, JSON.stringify(robloxUser.id));
-            
-            const embed = new EmbedBuilder()
-                .setColor('#00ff7f')
-                .setTitle('Account Linked Successfully!')
-                .setDescription(`Your Discord account has been tied to **${robloxUser.displayName}** (\`@${robloxUser.name}\`).`)
-                .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${robloxUser.id}&width=150&height=150&format=png`);
-            
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(`✅ Account Linked Successfully! Your Discord account has been tied to **${robloxUser.displayName}** (\`@${robloxUser.name}\`).`);
         } catch (err) {
             await interaction.editReply('❌ Database error linking your account.');
         }
@@ -111,7 +103,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // ==================== COMMAND: MILES (BALANCE) ====================
+    // ==================== COMMAND: POINTS (CUSTOM LAYOUT) ====================
     if (commandName === 'points') {
         await interaction.deferReply();
         const targetDiscordUser = options.getUser('user') || user;
@@ -121,33 +113,101 @@ client.on('interactionCreate', async interaction => {
             const linkResponse = await axios.get(`${DATABASE_URL}links/${targetDiscordUser.id}.json`);
             if (!linkResponse.data) {
                 return interaction.editReply(targetDiscordUser.id === user.id 
-                    ? '❌ You haven\'t linked a Roblox account yet! Use `/link` first.' 
+                    ? "❌ You haven't linked a Roblox account yet! Use `/link` first." 
                     : `❌ ${targetDiscordUser.username} has not linked a Roblox account.`);
             }
 
             const robloxId = linkResponse.data;
 
-            // Fetch current miles
-            const milesResponse = await axios.get(`${DATABASE_URL}miles/${robloxId}.json`);
-            const miles = milesResponse.data !== null ? milesResponse.data : 0;
+            // Fetch profile data from Roblox API
+            let robloxName = "Unknown";
+            let robloxDisplayName = "Unknown";
+            try {
+                const robloxProfile = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`);
+                robloxName = robloxProfile.data.name;
+                robloxDisplayName = robloxProfile.data.displayName;
+            } catch (apiErr) {
+                console.warn(`⚠️ Could not fetch names for Roblox ID ${robloxId}.`);
+            }
 
-            const embed = new EmbedBuilder()
-                .setColor('#00d2ff')
-                .setTitle(`Rex Flyer Account Summary`)
-                .setDescription(`Account holder: <@${targetDiscordUser.id}>`)
-                .addFields(
-                    { name: 'Total Balance', value: `✨ **${miles.toLocaleString()}** Miles`, inline: true },
-                    { name: 'Tier Level', value: miles >= 3000 ? '🥇 Sapphire' : 'Opal', inline: true }
-                )
-                .setThumbnail(`https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=150&height=150&format=png`);
+            // Fetch current points from Firebase
+            const pointsResponse = await axios.get(`${DATABASE_URL}points/${robloxId}.json`);
+            const points = pointsResponse.data !== null ? pointsResponse.data : 0;
 
-            await interaction.editReply({ embeds: [embed] });
+            // Determine dynamic Tier Level label
+            const tierLevel = points >= 3000 ? 'Sapphire Tier' : 'Opal Tier';
+
+            // Generate structural avatar endpoint 
+            const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${robloxId}&width=150&height=150&format=png`;
+
+            // Respond using your precise visual component payload matrix structure
+            await interaction.editReply({
+                components: [
+                    {
+                        type: 17, // Section/Container wrapper
+                        components: [
+                            {
+                                type: 12, // Media Layout Component
+                                items: [
+                                    {
+                                        media: {
+                                            url: avatarUrl
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                type: 14, // Spacing Element
+                                spacing: 1,
+                                divider: true
+                            },
+                            {
+                                type: 10, // Text Header Component
+                                content: `## Welcome, ${robloxName}!\n`
+                            },
+                            {
+                                type: 14,
+                                spacing: 1,
+                                divider: true
+                            },
+                            {
+                                type: 10, // Subtext Element
+                                content: `${robloxDisplayName}`
+                            },
+                            {
+                                type: 14,
+                                spacing: 1,
+                                divider: true
+                            },
+                            {
+                                type: 1, // ActionRow element wrapper
+                                components: [
+                                    {
+                                        type: 2, // Secondary Button
+                                        style: 2,
+                                        label: `Points: ${points.toLocaleString()}`,
+                                        custom_id: `btn_points_${user.id}`
+                                    },
+                                    {
+                                        type: 2, // Secondary Button
+                                        style: 2,
+                                        label: tierLevel,
+                                        custom_id: `btn_tier_${user.id}`
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            });
+
         } catch (err) {
-            await interaction.editReply('❌ Error accessing profile information.');
+            console.error('Points layout system crash:', err);
+            await interaction.editReply('❌ Error rendering your account configuration profile layout.');
         }
     }
 
-    // ==================== ADMIN COMMAND: ADD MILES ====================
+    // ==================== ADMIN COMMAND: ADD POINTS ====================
     if (commandName === 'addpoints') {
         await interaction.deferReply();
         const username = options.getString('username');
@@ -159,18 +219,18 @@ client.on('interactionCreate', async interaction => {
         if (!robloxUser) return interaction.editReply(`❌ Roblox user "${username}" not found.`);
 
         try {
-            const currentResponse = await axios.get(`${DATABASE_URL}miles/${robloxUser.id}.json`);
-            const currentMiles = currentResponse.data !== null ? currentResponse.data : 0;
-            const newTotal = currentMiles + amount;
+            const currentResponse = await axios.get(`${DATABASE_URL}points/${robloxUser.id}.json`);
+            const currentPoints = currentResponse.data !== null ? currentResponse.data : 0;
+            const newTotal = currentPoints + amount;
 
-            await axios.put(`${DATABASE_URL}miles/${robloxUser.id}.json`, JSON.stringify(newTotal));
-            await interaction.editReply(`✅ Successfully added **${amount.toLocaleString()}** miles to **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
+            await axios.put(`${DATABASE_URL}points/${robloxUser.id}.json`, JSON.stringify(newTotal));
+            await interaction.editReply(`✅ Successfully added **${amount.toLocaleString()}** points to **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
         } catch (err) {
             await interaction.editReply('❌ Failed to update records.');
         }
     }
 
-    // ==================== ADMIN COMMAND: REMOVE MILES ====================
+    // ==================== ADMIN COMMAND: REMOVE POINTS ====================
     if (commandName === 'removepoints') {
         await interaction.deferReply();
         const username = options.getString('username');
@@ -182,14 +242,14 @@ client.on('interactionCreate', async interaction => {
         if (!robloxUser) return interaction.editReply(`❌ Roblox user "${username}" not found.`);
 
         try {
-            const currentResponse = await axios.get(`${DATABASE_URL}miles/${robloxUser.id}.json`);
-            const currentMiles = currentResponse.data !== null ? currentResponse.data : 0;
+            const currentResponse = await axios.get(`${DATABASE_URL}points/${robloxUser.id}.json`);
+            const currentPoints = currentResponse.data !== null ? currentResponse.data : 0;
             
-            let newTotal = currentMiles - amount;
-            if (newTotal < 0) newTotal = 0; // Prevent negative balances
+            let newTotal = currentPoints - amount;
+            if (newTotal < 0) newTotal = 0; 
 
-            await axios.put(`${DATABASE_URL}miles/${robloxUser.id}.json`, JSON.stringify(newTotal));
-            await interaction.editReply(`Successfully removed **${amount.toLocaleString()}** miles from **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
+            await axios.put(`${DATABASE_URL}points/${robloxUser.id}.json`, JSON.stringify(newTotal));
+            await interaction.editReply(`📉 Successfully removed **${amount.toLocaleString()}** points from **${robloxUser.name}**'s account. New total: **${newTotal.toLocaleString()}**`);
         } catch (err) {
             await interaction.editReply('❌ Failed to update records.');
         }
