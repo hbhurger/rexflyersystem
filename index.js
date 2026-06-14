@@ -148,7 +148,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     // ==================== ADMIN COMMAND: ADD MILES ====================
-    if (commandName === 'addmiles') {
+    if (commandName === 'addpoints') {
         await interaction.deferReply();
         const username = options.getString('username');
         const amount = options.getInteger('amount');
@@ -171,7 +171,7 @@ client.on('interactionCreate', async interaction => {
     }
 
     // ==================== ADMIN COMMAND: REMOVE MILES ====================
-    if (commandName === 'removemiles') {
+    if (commandName === 'removepoints') {
         await interaction.deferReply();
         const username = options.getString('username');
         const amount = options.getInteger('amount');
