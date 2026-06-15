@@ -138,7 +138,7 @@ client.on('interactionCreate', async interaction => {
             const tierLevel = points >= 3000 ? 'Sapphire Tier' : 'Opal Tier';
 
             // Your static banner URL extracted from the webhook creator link
-            const bannerUrl = "https://cdn.discordapp.com/attachments/1344400512635900016/1344405391341256794/Rex_Flyer_System_3.png";
+            const bannerUrl = "blob:https://discord-webhook.com/28c016f0-1da5-451b-92fa-1006600ce669";
 
             // Using raw editReply payload mapping your layout with the static banner image
             await interaction.editReply({
