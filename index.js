@@ -137,8 +137,8 @@ client.on('interactionCreate', async interaction => {
             // Determine dynamic Tier Level label
             const tierLevel = points >= 3000 ? 'Sapphire Tier' : 'Opal Tier';
 
-            // Your static banner URL extracted from the webhook creator link
-            const bannerUrl = "blob:https://discord-webhook.com/28c016f0-1da5-451b-92fa-1006600ce669";
+            // Pointing directly to your postimg absolute image link address
+            const directBannerUrl = "https://i.postimg.cc/QBzZnDDf/Group-3-2-png.webp";
 
             // Using raw editReply payload mapping your layout with the static banner image
             await interaction.editReply({
@@ -152,7 +152,7 @@ client.on('interactionCreate', async interaction => {
                                 items: [
                                     {
                                         media: {
-                                            
+                                            url: directBannerUrl
                                         }
                                     }
                                 ]
