@@ -152,7 +152,7 @@ client.on('interactionCreate', async interaction => {
                                 items: [
                                     {
                                         media: {
-                                            url: bannerUrl
+                                            
                                         }
                                     }
                                 ]
