@@ -32,7 +32,7 @@ client.once('ready', async () => {
         new SlashCommandBuilder()
             .setName('points')
             .setDescription('Check your points balance')
-            .addUserOption(option => option.setName('user').setDescription('View someone else's points (Optional)').setRequired(false)),
+            .addUserOption(option => option.setName('user').setDescription("View someone else's points (Optional)").setRequired(false)),
 
         // ADMIN ONLY: Add Points
         new SlashCommandBuilder()
